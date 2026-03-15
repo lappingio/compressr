@@ -20,3 +20,29 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# Point ex_aws at LocalStack for testing
+config :ex_aws,
+  access_key_id: "test",
+  secret_access_key: "test",
+  region: "us-east-1"
+
+config :ex_aws, :s3,
+  scheme: "http://",
+  host: "localhost",
+  port: 4566
+
+config :ex_aws, :dynamodb,
+  scheme: "http://",
+  host: "localhost",
+  port: 4566
+
+config :ex_aws, :sqs,
+  scheme: "http://",
+  host: "localhost",
+  port: 4566
+
+# Compressr test-specific config
+config :compressr,
+  dynamodb_table_prefix: "compressr_test_",
+  s3_bucket: "compressr-test-events"
