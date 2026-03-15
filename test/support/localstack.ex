@@ -12,18 +12,21 @@ defmodule Compressr.Test.LocalStack do
   @localstack_url "http://localhost:4566"
   @health_url "#{@localstack_url}/_localstack/health"
 
+  # Tables defined as {key_schema, attribute_definitions}
+  # key_schema: keyword list of {attr_name, key_type}
+  # attribute_definitions: keyword list of {attr_name, attr_type}
   @dynamodb_tables %{
     "compressr_test_config" => %{
-      key_schema: [%{attribute_name: "pk", key_type: "HASH"}, %{attribute_name: "sk", key_type: "RANGE"}],
-      attribute_definitions: [%{attribute_name: "pk", attribute_type: "S"}, %{attribute_name: "sk", attribute_type: "S"}]
+      key_schema: [pk: :hash, sk: :range],
+      attribute_definitions: [pk: :string, sk: :string]
     },
     "compressr_test_schemas" => %{
-      key_schema: [%{attribute_name: "pk", key_type: "HASH"}, %{attribute_name: "sk", key_type: "RANGE"}],
-      attribute_definitions: [%{attribute_name: "pk", attribute_type: "S"}, %{attribute_name: "sk", attribute_type: "S"}]
+      key_schema: [pk: :hash, sk: :range],
+      attribute_definitions: [pk: :string, sk: :string]
     },
     "compressr_test_collection_state" => %{
-      key_schema: [%{attribute_name: "pk", key_type: "HASH"}, %{attribute_name: "sk", key_type: "RANGE"}],
-      attribute_definitions: [%{attribute_name: "pk", attribute_type: "S"}, %{attribute_name: "sk", attribute_type: "S"}]
+      key_schema: [pk: :hash, sk: :range],
+      attribute_definitions: [pk: :string, sk: :string]
     }
   }
 
