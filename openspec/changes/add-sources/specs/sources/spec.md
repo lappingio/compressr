@@ -128,42 +128,64 @@ The system SHALL provide an S3 source type that operates as a pull-based collect
 ### Requirement: S3 Glacier Tiered-Storage Rehydration
 The system SHALL support ingesting objects stored in S3 Glacier tiers (Instant Retrieval, Flexible Retrieval, Deep Archive). The source SHALL use the object storage tiered retrieval behaviour to initiate restore, poll for availability, and replay objects when they become accessible. The system SHALL manage the full Glacier restore lifecycle automatically. Before initiating any non-instant Glacier restore, the system SHALL present a dynamic cost estimate showing all available retrieval tiers with their cost, time, and per-GB rate, and require operator confirmation. The tier selection SHALL be made at replay time, not pre-configured — the operator picks the speed/cost tradeoff for each replay job.
 
-#### Scenario: Operator-initiated replay presents tier options dynamically
+#### Scenario: Operator-initiated replay presents tier and mode options
 - **WHEN** an operator requests a replay of data stored in Glacier Flexible Retrieval or Deep Archive
 - **THEN** the system SHALL calculate the total data size (object count and bytes) for the requested time range
 - **THEN** the system SHALL present a tier selection showing all available options with estimated cost, estimated retrieval time, and per-GB rate (e.g., Bulk $2.12 / 5-12 hrs, Standard $8.47 / 3-5 hrs, Expedited $84.70 / 1-5 min)
-- **THEN** the system SHALL wait for the operator to select a tier and confirm before initiating restores
+- **THEN** the system SHALL present a replay mode selection: as-available or ordered
+- **THEN** the system SHALL wait for the operator to select tier, mode, and confirm before initiating restores
 
-#### Scenario: API-initiated replay accepts tier parameter
+#### Scenario: API-initiated replay accepts tier and mode parameters
 - **WHEN** a replay is initiated via the REST API
-- **THEN** the request SHALL include a `retrieval_tier` parameter (bulk, standard, expedited)
+- **THEN** the request SHALL include a `retrieval_tier` parameter (bulk, standard, expedited) and a `replay_mode` parameter (as_available, ordered)
 - **THEN** the API response SHALL include the estimated cost and estimated retrieval time before the restore begins
-- **WHEN** no `retrieval_tier` is specified
-- **THEN** the system SHALL default to `bulk` (lowest cost)
+- **WHEN** no `retrieval_tier` is specified, the system SHALL default to `bulk` (lowest cost)
+- **WHEN** no `replay_mode` is specified, the system SHALL default to `as_available`
 
-#### Scenario: Object in Glacier Flexible Retrieval
-- **WHEN** a confirmed replay encounters an object in S3 Glacier Flexible Retrieval
-- **THEN** the source initiates a restore request at the operator-selected tier and records the pending restore in DynamoDB
-- **WHEN** polling detects the object has been restored
-- **THEN** the source retrieves the object and emits events
+### Requirement: As-Available Replay Mode
+In as-available mode, the system SHALL process each restored object as soon as it becomes available, regardless of chronological order. The system SHALL configure an S3 Event Notification via EventBridge to listen for `s3:ObjectRestore:Completed` events for the target bucket and prefix. EventBridge SHALL deliver notifications to an SQS queue. The replay process SHALL consume from the SQS queue and immediately process each restored object. This mode minimizes time-to-first-data — the operator starts seeing events minutes after the first object thaws, rather than waiting hours for all objects to restore.
 
-#### Scenario: Object in Glacier Deep Archive
-- **WHEN** a confirmed replay encounters an object in S3 Glacier Deep Archive
-- **THEN** the source initiates a restore request at the operator-selected tier and records the pending restore
-- **WHEN** the object becomes available
-- **THEN** the source retrieves the object and emits events
+#### Scenario: EventBridge notification triggers immediate processing
+- **WHEN** S3 completes restoring an object from Glacier
+- **THEN** S3 fires an `s3:ObjectRestore:Completed` event to EventBridge
+- **THEN** EventBridge delivers the event to the replay job's SQS queue
+- **THEN** the replay process picks up the message and processes the object immediately
+
+#### Scenario: Multiple objects thaw at different times
+- **WHEN** a replay job has initiated restores for 1,000 objects
+- **THEN** objects thaw over a window (e.g., 5-12 hours for Bulk)
+- **THEN** each object is processed as soon as its EventBridge notification arrives
+- **THEN** events arrive at the destination out of chronological order
+
+#### Scenario: EventBridge and SQS cleanup after replay
+- **WHEN** all objects in the replay job have been processed
+- **THEN** the system SHALL remove the EventBridge rule and SQS queue created for that replay job
+
+### Requirement: Ordered Replay Mode
+In ordered mode, the system SHALL build a manifest of all objects in the requested time range, sorted chronologically. The system SHALL walk the manifest in sequence, processing one object at a time. If the next object in sequence is not yet restored, the system SHALL poll that specific object's restore status at a configurable interval until it becomes available. No EventBridge or SQS is needed — the system knows exactly which object it needs next and waits for it. This mode guarantees chronological event ordering at the cost of higher time-to-first-data.
+
+#### Scenario: Objects processed in chronological order
+- **WHEN** a replay job is initiated in ordered mode
+- **THEN** the system SHALL build a sorted manifest of all objects in the time range
+- **THEN** the system SHALL process objects strictly in manifest order
+
+#### Scenario: System waits for next object in sequence
+- **WHEN** the next object in the manifest is not yet restored
+- **THEN** the system SHALL poll that object's restore status at a configurable interval (default 60 seconds)
+- **THEN** the system SHALL NOT skip ahead to a later object that may already be available
+
+#### Scenario: Ordered replay progresses as objects thaw
+- **WHEN** objects thaw out of manifest order (e.g., object 5 thaws before object 3)
+- **THEN** the system SHALL wait for object 3 before processing
+- **THEN** once object 3 is processed, objects 4 and 5 (already available) SHALL be processed immediately without polling
 
 #### Scenario: Object in Glacier Instant Retrieval
 - **WHEN** a collection run encounters an object in S3 Glacier Instant Retrieval
 - **THEN** the source retrieves it synchronously (no async restore needed, no cost confirmation required) and emits events
 
-#### Scenario: Restore status polling
-- **WHEN** a Glacier restore has been initiated
-- **THEN** the source polls the object's restore status at a configurable interval until the object is available or the restore expires
-
-#### Scenario: Actual cost tracked after restore completes
-- **WHEN** a Glacier restore completes
-- **THEN** the system SHALL record the actual bytes restored, the tier used, and the actual cost
+#### Scenario: Actual cost tracked after replay completes
+- **WHEN** a replay job completes (all objects processed)
+- **THEN** the system SHALL record the actual bytes restored, the tier used, the replay mode, the wall-clock duration, and the actual cost
 - **THEN** the actual cost SHALL be compared to the pre-action estimate and made available in the cost dashboard
 
 ### Requirement: Source Management UI
