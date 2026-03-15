@@ -126,27 +126,45 @@ The system SHALL provide an S3 source type that operates as a pull-based collect
 - **THEN** the source decompresses it before emitting events
 
 ### Requirement: S3 Glacier Tiered-Storage Rehydration
-The system SHALL support ingesting objects stored in S3 Glacier tiers (Instant Retrieval, Flexible Retrieval, Deep Archive). The source SHALL use the object storage tiered retrieval behaviour to initiate restore, poll for availability, and replay objects when they become accessible. The system SHALL manage the full Glacier restore lifecycle automatically.
+The system SHALL support ingesting objects stored in S3 Glacier tiers (Instant Retrieval, Flexible Retrieval, Deep Archive). The source SHALL use the object storage tiered retrieval behaviour to initiate restore, poll for availability, and replay objects when they become accessible. The system SHALL manage the full Glacier restore lifecycle automatically. Before initiating any non-instant Glacier restore, the system SHALL present a dynamic cost estimate showing all available retrieval tiers with their cost, time, and per-GB rate, and require operator confirmation. The tier selection SHALL be made at replay time, not pre-configured — the operator picks the speed/cost tradeoff for each replay job.
+
+#### Scenario: Operator-initiated replay presents tier options dynamically
+- **WHEN** an operator requests a replay of data stored in Glacier Flexible Retrieval or Deep Archive
+- **THEN** the system SHALL calculate the total data size (object count and bytes) for the requested time range
+- **THEN** the system SHALL present a tier selection showing all available options with estimated cost, estimated retrieval time, and per-GB rate (e.g., Bulk $2.12 / 5-12 hrs, Standard $8.47 / 3-5 hrs, Expedited $84.70 / 1-5 min)
+- **THEN** the system SHALL wait for the operator to select a tier and confirm before initiating restores
+
+#### Scenario: API-initiated replay accepts tier parameter
+- **WHEN** a replay is initiated via the REST API
+- **THEN** the request SHALL include a `retrieval_tier` parameter (bulk, standard, expedited)
+- **THEN** the API response SHALL include the estimated cost and estimated retrieval time before the restore begins
+- **WHEN** no `retrieval_tier` is specified
+- **THEN** the system SHALL default to `bulk` (lowest cost)
 
 #### Scenario: Object in Glacier Flexible Retrieval
-- **WHEN** a collection run encounters an object in S3 Glacier Flexible Retrieval
-- **THEN** the source initiates a restore request and records the pending restore in DynamoDB
+- **WHEN** a confirmed replay encounters an object in S3 Glacier Flexible Retrieval
+- **THEN** the source initiates a restore request at the operator-selected tier and records the pending restore in DynamoDB
 - **WHEN** polling detects the object has been restored
 - **THEN** the source retrieves the object and emits events
 
 #### Scenario: Object in Glacier Deep Archive
-- **WHEN** a collection run encounters an object in S3 Glacier Deep Archive
-- **THEN** the source initiates a restore request with the configured retrieval tier and records the pending restore
-- **WHEN** the object becomes available (up to 12 hours later)
+- **WHEN** a confirmed replay encounters an object in S3 Glacier Deep Archive
+- **THEN** the source initiates a restore request at the operator-selected tier and records the pending restore
+- **WHEN** the object becomes available
 - **THEN** the source retrieves the object and emits events
 
 #### Scenario: Object in Glacier Instant Retrieval
 - **WHEN** a collection run encounters an object in S3 Glacier Instant Retrieval
-- **THEN** the source retrieves it synchronously (no async restore needed) and emits events
+- **THEN** the source retrieves it synchronously (no async restore needed, no cost confirmation required) and emits events
 
 #### Scenario: Restore status polling
 - **WHEN** a Glacier restore has been initiated
 - **THEN** the source polls the object's restore status at a configurable interval until the object is available or the restore expires
+
+#### Scenario: Actual cost tracked after restore completes
+- **WHEN** a Glacier restore completes
+- **THEN** the system SHALL record the actual bytes restored, the tier used, and the actual cost
+- **THEN** the actual cost SHALL be compared to the pre-action estimate and made available in the cost dashboard
 
 ### Requirement: Source Management UI
 The system SHALL provide a LiveView-based UI for managing sources. Administrators SHALL be able to view all sources with real-time status, create new sources with type-specific configuration forms, edit existing sources, enable/disable sources, and delete sources.
