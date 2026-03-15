@@ -11,8 +11,12 @@ defmodule Compressr.Application do
       CompressrWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:compressr, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Compressr.PubSub},
+      # Source process registry and supervisor
+      {Registry, keys: :unique, name: Compressr.Source.Registry},
+      Compressr.Source.Supervisor,
       # Start a worker by calling: Compressr.Worker.start_link(arg)
       # {Compressr.Worker, arg},
+      Compressr.Health.Readiness,
       # Start to serve requests, typically the last entry
       CompressrWeb.Endpoint
     ]

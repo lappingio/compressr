@@ -15,13 +15,36 @@ defmodule CompressrWeb.Router do
   end
 
   scope "/", CompressrWeb do
+    get "/health", HealthController, :health
+    get "/ready", HealthController, :ready
+  end
+
+  # Auth routes — no authentication required
+  scope "/auth", CompressrWeb do
+    pipe_through :browser
+
+    get "/login", AuthController, :login
+    get "/callback", AuthController, :callback
+    get "/logout", AuthController, :logout
+  end
+
+  scope "/", CompressrWeb do
     pipe_through :browser
 
     get "/", PageController, :home
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", CompressrWeb do
-  #   pipe_through :api
-  # end
+  # API v1 routes
+  scope "/api/v1", CompressrWeb.Api do
+    pipe_through [:api]
+
+    resources "/system/inputs", SourceController, except: [:new, :edit]
+    resources "/system/outputs", DestinationController, except: [:new, :edit]
+    resources "/system/pipelines", PipelineController, except: [:new, :edit]
+    resources "/system/routes", RouteController, except: [:new, :edit]
+
+    post "/auth/tokens", TokenController, :create
+    get "/auth/tokens", TokenController, :index
+    delete "/auth/tokens/:id", TokenController, :delete
+  end
 end
