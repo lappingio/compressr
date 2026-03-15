@@ -14,6 +14,9 @@ defmodule Compressr.Application do
       # Source process registry and supervisor
       {Registry, keys: :unique, name: Compressr.Source.Registry},
       Compressr.Source.Supervisor,
+      # Drain coordinator and shutdown handler
+      Compressr.Drain,
+      Compressr.Drain.ShutdownHandler,
       # Start a worker by calling: Compressr.Worker.start_link(arg)
       # {Compressr.Worker, arg},
       Compressr.Health.Readiness,
@@ -25,6 +28,24 @@ defmodule Compressr.Application do
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Compressr.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  @impl true
+  def prep_stop(state) do
+    require Logger
+    Logger.info("Application prep_stop: initiating graceful drain before shutdown")
+
+    try do
+      Compressr.Drain.initiate()
+    rescue
+      e ->
+        Logger.error("Drain failed during prep_stop: #{inspect(e)}")
+    catch
+      kind, reason ->
+        Logger.error("Drain failed during prep_stop: #{inspect(kind)} #{inspect(reason)}")
+    end
+
+    state
   end
 
   # Tell Phoenix to update the endpoint configuration

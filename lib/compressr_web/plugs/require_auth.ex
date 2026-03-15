@@ -79,6 +79,7 @@ defmodule CompressrWeb.Plugs.RequireAuth do
         (user_data["role"] || user_data[:role] || "viewer")
         |> to_string()
         |> String.to_existing_atom(),
+      disabled: (user_data["disabled"] || user_data[:disabled]) == true,
       inserted_at: user_data["inserted_at"] || user_data[:inserted_at],
       updated_at: user_data["updated_at"] || user_data[:updated_at]
     }

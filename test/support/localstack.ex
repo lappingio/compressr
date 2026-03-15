@@ -27,6 +27,10 @@ defmodule Compressr.Test.LocalStack do
     "compressr_test_collection_state" => %{
       key_schema: [pk: :hash, sk: :range],
       attribute_definitions: [pk: :string, sk: :string]
+    },
+    "compressr_test_audit" => %{
+      key_schema: [pk: :hash, sk: :range],
+      attribute_definitions: [pk: :string, sk: :string]
     }
   }
 

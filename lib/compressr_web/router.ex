@@ -43,8 +43,12 @@ defmodule CompressrWeb.Router do
     resources "/system/pipelines", PipelineController, except: [:new, :edit]
     resources "/system/routes", RouteController, except: [:new, :edit]
 
+    get "/system/audit", AuditController, :index
+
     post "/auth/tokens", TokenController, :create
     get "/auth/tokens", TokenController, :index
     delete "/auth/tokens/:id", TokenController, :delete
+
+    resources "/system/users", UserController, only: [:index, :show, :update, :delete]
   end
 end

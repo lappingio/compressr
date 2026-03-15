@@ -8,17 +8,39 @@ defmodule Compressr.Auth.User do
   """
 
   @enforce_keys [:sub, :email, :provider, :role]
-  defstruct [:sub, :email, :display_name, :provider, :role, :inserted_at, :updated_at]
+  defstruct [:sub, :email, :display_name, :provider, :role, :disabled, :inserted_at, :updated_at]
 
   @type t :: %__MODULE__{
           sub: String.t(),
           email: String.t(),
           display_name: String.t() | nil,
           provider: String.t(),
-          role: :admin | :viewer,
+          role: :admin | :editor | :viewer,
+          disabled: boolean() | nil,
           inserted_at: String.t() | nil,
           updated_at: String.t() | nil
         }
+
+  @valid_roles [:admin, :editor, :viewer]
+
+  @doc "Returns the list of valid roles."
+  @spec valid_roles() :: [:admin | :editor | :viewer]
+  def valid_roles, do: @valid_roles
+
+  @doc "Returns true if the user has the :admin role."
+  @spec admin?(t()) :: boolean()
+  def admin?(%__MODULE__{role: :admin}), do: true
+  def admin?(_), do: false
+
+  @doc "Returns true if the user has the :editor role."
+  @spec editor?(t()) :: boolean()
+  def editor?(%__MODULE__{role: :editor}), do: true
+  def editor?(_), do: false
+
+  @doc "Returns true if the user has the :viewer role."
+  @spec viewer?(t()) :: boolean()
+  def viewer?(%__MODULE__{role: :viewer}), do: true
+  def viewer?(_), do: false
 
   @doc """
   Find an existing user or create a new one.
@@ -39,6 +61,7 @@ defmodule Compressr.Auth.User do
           display_name: Map.get(attrs, :display_name),
           provider: provider,
           role: :viewer,
+          disabled: false,
           inserted_at: now,
           updated_at: now
         }
@@ -107,6 +130,36 @@ defmodule Compressr.Auth.User do
     {:ok, users}
   end
 
+  @doc """
+  Update a user's role.
+  """
+  @spec update_role(t(), atom()) :: {:ok, t()}
+  def update_role(%__MODULE__{} = user, new_role) when new_role in @valid_roles do
+    now = DateTime.utc_now() |> DateTime.to_iso8601()
+    updated = %{user | role: new_role, updated_at: now}
+    item = user_to_dynamo_item(updated)
+
+    ExAws.Dynamo.put_item(table_name(), item)
+    |> ExAws.request!()
+
+    {:ok, updated}
+  end
+
+  @doc """
+  Disable a user by setting disabled: true.
+  """
+  @spec disable(t()) :: {:ok, t()}
+  def disable(%__MODULE__{} = user) do
+    now = DateTime.utc_now() |> DateTime.to_iso8601()
+    disabled_user = %{user | disabled: true, updated_at: now}
+    item = user_to_dynamo_item(disabled_user)
+
+    ExAws.Dynamo.put_item(table_name(), item)
+    |> ExAws.request!()
+
+    {:ok, disabled_user}
+  end
+
   defp table_name do
     prefix = Application.get_env(:compressr, :dynamodb_table_prefix, "compressr_")
     "#{prefix}config"
@@ -120,6 +173,7 @@ defmodule Compressr.Auth.User do
       "display_name" => user.display_name || "",
       "provider" => user.provider,
       "role" => Atom.to_string(user.role),
+      "disabled" => if(user.disabled, do: "true", else: "false"),
       "inserted_at" => user.inserted_at || "",
       "updated_at" => user.updated_at || ""
     }
@@ -132,6 +186,7 @@ defmodule Compressr.Auth.User do
       display_name: get_s(item, "display_name"),
       provider: get_s(item, "provider"),
       role: item |> get_s("role") |> String.to_existing_atom(),
+      disabled: get_s(item, "disabled") == "true",
       inserted_at: get_s(item, "inserted_at"),
       updated_at: get_s(item, "updated_at")
     }

@@ -82,4 +82,27 @@ if config_env() == :prod do
   #       force_ssl: [hsts: true]
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
+
+  # --------------------------------------------------------------------------
+  # Erlang Distribution TLS
+  # --------------------------------------------------------------------------
+  #
+  # Configure TLS for inter-node communication. Without this, any node on the
+  # network can join the cluster and execute arbitrary code.
+  #
+  # Set these environment variables to enable:
+  #   DISTRIBUTION_TLS_CERTFILE  — path to the PEM certificate
+  #   DISTRIBUTION_TLS_KEYFILE   — path to the PEM private key
+  #   DISTRIBUTION_TLS_CACERTFILE — path to the CA cert (enables peer verification)
+
+  if certfile = System.get_env("DISTRIBUTION_TLS_CERTFILE") do
+    keyfile =
+      System.get_env("DISTRIBUTION_TLS_KEYFILE") ||
+        raise "DISTRIBUTION_TLS_KEYFILE is required when DISTRIBUTION_TLS_CERTFILE is set"
+
+    config :compressr, :cluster_tls,
+      certfile: certfile,
+      keyfile: keyfile,
+      cacertfile: System.get_env("DISTRIBUTION_TLS_CACERTFILE")
+  end
 end

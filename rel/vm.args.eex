@@ -1,0 +1,33 @@
+## Erlang VM Args for Compressr releases
+##
+## See: https://www.erlang.org/doc/man/erl
+
+## Name of the node
+-name <%= @release.name %>@127.0.0.1
+
+## Cookie for distributed Erlang
+## IMPORTANT: Use a strong random cookie in production.
+## Generate one with:
+##   elixir -e "IO.puts(:crypto.strong_rand_bytes(48) |> Base.url_encode64(padding: false))"
+-setcookie <%= @release.cookie %>
+
+## Heartbeat management; auto-restarts VM if it dies or becomes unresponsive
+## -heart
+
+## Enable TLS for Erlang distribution (uncomment to activate):
+## -proto_dist inet_tls
+## -ssl_dist_optfile config/ssl_dist.conf
+##
+## The ssl_dist.conf file should contain:
+##   [{server, [{certfile, "path/to/cert.pem"}, {keyfile, "path/to/key.pem"},
+##              {cacertfile, "path/to/ca.pem"}, {verify, verify_peer},
+##              {secure_renegotiate, true}]},
+##    {client, [{certfile, "path/to/cert.pem"}, {keyfile, "path/to/key.pem"},
+##              {cacertfile, "path/to/ca.pem"}, {verify, verify_peer},
+##              {secure_renegotiate, true}]}].
+
+## Increase number of concurrent ports/sockets
+## -env ERL_MAX_PORTS 65536
+
+## Tweak GC to run more often
+## +hms 8192
