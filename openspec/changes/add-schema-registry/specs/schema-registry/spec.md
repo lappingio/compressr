@@ -138,6 +138,35 @@ Schema drift detection SHALL operate per log type, not per source. When drift is
 - **WHEN** schema drift is detected in a log type
 - **THEN** the drift alert SHALL include the log type name and ID in addition to the source ID and field details
 
+### Requirement: Schema Version History and Field Availability Timeline
+The system SHALL maintain a versioned history of each log type's schema. Each schema version SHALL record the timestamp when it became active, the fields added, fields removed, and fields whose type changed compared to the previous version. The system SHALL track per-field availability windows: the timestamp when a field first appeared and, if applicable, when it was last seen. This enables the system to answer "when was this field available?" and scope queries to only the time range where a field existed. When integrated with the Iceberg destination, field availability metadata SHALL be used to prune Parquet files that predate a field's existence, reducing Athena scan volume and cost.
+
+#### Scenario: Schema version recorded on change
+- **WHEN** schema drift is acknowledged for a log type, creating a new baseline schema
+- **THEN** the system SHALL create a new schema version record with the timestamp, a list of fields added, fields removed, and fields with type changes
+- **THEN** previous schema versions SHALL remain queryable
+
+#### Scenario: Field availability timeline tracked
+- **WHEN** a new field `request_id` is first observed in the "nginx_access" log type on 2026-03-01
+- **THEN** the system SHALL record `request_id` with a `first_seen` timestamp of 2026-03-01
+- **WHEN** an operator queries for the availability of `request_id`
+- **THEN** the system SHALL report "available from 2026-03-01"
+
+#### Scenario: Query scoped by field availability
+- **WHEN** an operator queries for events containing `request_id` across a date range of 2026-01-01 to 2026-03-14
+- **THEN** the system SHALL advise that `request_id` is only available from 2026-03-01
+- **THEN** the system SHALL recommend limiting the scan to 2026-03-01 onward to reduce Athena costs
+
+#### Scenario: Iceberg partition pruning using field availability
+- **WHEN** an Athena query references a field that was added on a known date
+- **THEN** the Iceberg metadata SHALL enable pruning of Parquet files written before that date
+- **THEN** the query SHALL scan only partitions where the field could exist
+
+#### Scenario: View schema evolution timeline in UI
+- **WHEN** an operator views a log type in the schema browser
+- **THEN** they SHALL see a version history showing each schema change with timestamp, fields added, fields removed, and type changes
+- **THEN** they SHALL be able to compare any two schema versions side by side
+
 ### Requirement: Query Assistance
 The schema registry SHALL support field-level search across all log types and sources. Given a field name or partial field name, the system SHALL return which log types contain that field, along with the field's type and sample values. This enables operators to locate where specific data lives across their sources.
 
