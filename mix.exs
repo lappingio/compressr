@@ -11,7 +11,16 @@ defmodule Compressr.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      test_coverage: [
+        threshold: 85,
+        ignore_modules: [
+          CompressrWeb.CoreComponents,
+          CompressrWeb.PageHTML,
+          CompressrWeb.Layouts,
+          CompressrWeb.ErrorHTML
+        ]
+      ]
     ]
   end
 
